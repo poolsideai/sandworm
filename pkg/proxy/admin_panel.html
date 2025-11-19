@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>sandworm network proxy</title>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #333333;
+            --border-color: #ddd;
+            --section-bg: #ffffff;
+            --stat-bg: #f5f5f5;
+            --button-bg: #007bff;
+            --button-hover: #0056b3;
+            --logs-bg: #f8f9fa;
+            --log-entry-bg: #ffffff;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #1a1a1a;
+                --text-color: #e0e0e0;
+                --border-color: #444;
+                --section-bg: #2d2d2d;
+                --stat-bg: #3a3a3a;
+                --button-bg: #0d6efd;
+                --button-hover: #0b5ed7;
+                --logs-bg: #2a2a2a;
+                --log-entry-bg: #353535;
+                --success-color: #198754;
+                --danger-color: #dc3545;
+            }
+        }
+        
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .section { 
+            margin: 20px 0; 
+            padding: 20px; 
+            border: 1px solid var(--border-color); 
+            border-radius: 5px; 
+            background-color: var(--section-bg);
+        }
+        .stats { display: flex; gap: 20px; flex-wrap: wrap; }
+        .stat-box { 
+            padding: 15px; 
+            background: var(--stat-bg); 
+            border-radius: 5px; 
+            text-align: center; 
+            min-width: 120px;
+            flex: 1;
+        }
+        .two-column { display: flex; gap: 20px; flex-wrap: wrap; align-items: stretch; }
+        .column { flex: 1; min-width: 300px; display: flex; }
+        .column .section { display: flex; flex-direction: column; flex: 1; }
+        .rules-form { flex: 1; display: flex; flex-direction: column; margin: 20px 0; }
+        .rules-form textarea { min-height: 120px; resize: vertical; }
+        .stats-table-wrapper { flex: 1; display: flex; flex-direction: column; }
+        .stat-number { font-size: 24px; font-weight: bold; color: var(--button-bg); }
+        .stat-allowed { color: var(--success-color); }
+        .stat-blocked { color: var(--danger-color); }
+        .rules-form input, .rules-form textarea { 
+            width: 100%; 
+            padding: 8px; 
+            margin: 5px 0; 
+            box-sizing: border-box; 
+            background-color: var(--stat-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+        }
+        .rules-form button { 
+            padding: 10px 20px; 
+            background: var(--button-bg); 
+            color: white; 
+            border: none; 
+            border-radius: 3px; 
+            cursor: pointer;
+            align-self: flex-start;
+            margin-top: 10px;
+        }
+        .rules-form button:hover { background: var(--button-hover); }
+        .logs { 
+            max-height: 400px; 
+            overflow-y: auto; 
+            background: var(--logs-bg); 
+            padding: 15px; 
+            border-radius: 5px; 
+        }
+        .log-entry { 
+            margin: 5px 0; 
+            padding: 5px; 
+            background: var(--log-entry-bg); 
+            border-radius: 3px; 
+            font-family: monospace; 
+            font-size: 12px; 
+        }
+        .log-allowed { border-left: 3px solid var(--success-color); }
+        .log-blocked { border-left: 3px solid var(--danger-color); }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            background-color: var(--section-bg);
+        }
+        th, td { 
+            padding: 10px; 
+            text-align: left; 
+            border-bottom: 1px solid var(--border-color); 
+        }
+        th { background-color: var(--stat-bg); }
+        .allowed-indicator { 
+            color: var(--success-color); 
+            font-weight: bold; 
+            font-size: 14px;
+        }
+        .blocked-indicator { 
+            color: var(--danger-color); 
+            font-weight: bold; 
+            font-size: 14px;
+        }
+        .filter-controls {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        .filter-controls label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .filter-controls input[type="checkbox"] {
+            margin: 0;
+            width: auto;
+        }
+    </style>
+    <script>
+        function refreshData() {
+            fetch('/admin/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('total-requests').textContent = data.totalRequests;
+                    document.getElementById('allowed-requests').textContent = data.allowedRequests;
+                    document.getElementById('blocked-requests').textContent = data.blockedRequests;
+                    document.getElementById('domain-stats').innerHTML = data.domainStats.map(stat => {
+                        const name = stat.domain || stat.cidr;
+                        return '<tr><td>' + name + '</td><td>' + 
+                               (stat.allowedCount > 0 ? '<span class="allowed-indicator">&check;</span> ' + stat.allowedCount : '') +
+                               (stat.allowedCount > 0 && stat.blockedCount > 0 ? '<br>' : '') +
+                               (stat.blockedCount > 0 ? '<span class="blocked-indicator">&cross;</span> ' + stat.blockedCount : '') +
+                               '</td></tr>';
+                    }).join('');
+                    updateRecentLogs(data.recentRequests);
+                })
+                .catch(console.error);
+        }
+        
+        let allRecentRequests = [];
+        
+        function updateRecentLogs(requests) {
+            allRecentRequests = requests;
+            filterAndDisplayLogs();
+        }
+        
+        function filterAndDisplayLogs() {
+            const showAllowed = document.getElementById('show-allowed').checked;
+            const showBlocked = document.getElementById('show-blocked').checked;
+            
+            const filteredRequests = allRecentRequests.filter(req => {
+                if (req.allowed && showAllowed) return true;
+                if (!req.allowed && showBlocked) return true;
+                return false;
+            });
+            
+            document.getElementById('recent-logs').innerHTML = filteredRequests.slice().reverse().map(req => 
+                '<div class="log-entry ' + (req.allowed ? 'log-allowed' : 'log-blocked') + '">' +
+                '<strong>' + new Date(req.timestamp).toLocaleTimeString() + '</strong> ' + req.method + ' ' + req.host + ' ' + 
+                (req.allowed ? 'ALLOWED' : 'BLOCKED') + '</div>'
+            ).join('');
+        }
+        
+        function saveRules() {
+            const domains = document.getElementById('domains').value.split('\n').filter(d => d.trim());
+            const cidrs = document.getElementById('cidrs').value.split('\n').filter(c => c.trim());
+            
+            fetch('/admin/api/rules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domains, cidrs })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Rules updated successfully');
+                    refreshData();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(console.error);
+        }
+        
+        setInterval(refreshData, 2000);
+        window.onload = function() {
+            refreshData();
+            // Add event listeners for filter checkboxes
+            document.getElementById('show-allowed').addEventListener('change', filterAndDisplayLogs);
+            document.getElementById('show-blocked').addEventListener('change', filterAndDisplayLogs);
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>sandworm network proxy</h1>
+        
+        <div class="section">
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-number" id="total-requests">0</div>
+                    <div>total requests</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number stat-allowed" id="allowed-requests">0</div>
+                    <div>allowed requests</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number stat-blocked" id="blocked-requests">0</div>
+                    <div>blocked requests</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="two-column">
+            <div class="column">
+                <div class="section">
+                    <h2>access rules</h2>
+                    <div class="rules-form">
+                        <h3>allowed domains</h3>
+                        <textarea id="domains" rows="6" placeholder="Enter one domain per line (e.g., example.com)">{{.Domains}}</textarea>
+                        
+                        <h3>allowed CIDR blocks</h3>
+                        <textarea id="cidrs" rows="6" placeholder="Enter one CIDR per line (e.g., 192.168.1.0/24)">{{.CIDRs}}</textarea>
+                        
+                        <button onclick="saveRules()">save rules</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="column">
+                <div class="section">
+                    <h2>request stats</h2>
+                    <div class="stats-table-wrapper">
+                        <table>
+                            <thead>
+                                <tr><th>target</th><th>requests</th></tr>
+                            </thead>
+                            <tbody id="domain-stats">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>recent requests</h2>
+            <div class="filter-controls">
+                <label><input type="checkbox" id="show-allowed" checked> show allowed</label>
+                <label><input type="checkbox" id="show-blocked" checked> show blocked</label>
+            </div>
+            <div class="logs" id="recent-logs">
+            </div>
+        </div>
+    </div>
+</body>
+</html>

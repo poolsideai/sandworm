@@ -1,0 +1,9 @@
+/sandworm
+sandworm-linux-*
+vendor/
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+go.work
