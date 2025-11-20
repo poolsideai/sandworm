@@ -79,11 +79,13 @@ else
     docker buildx use "${BUILDER_NAME}"
 fi
 
-# Build multiarch image using the local binaries
+# Build multiarch image using the local binaries with attestations
 # Build from the script directory
 docker buildx build $@ \
     --platform linux/amd64,linux/arm64 \
     --tag "${IMAGE_NAME}:latest" \
+    --attest type=provenance,mode=max \
+    --attest type=sbom \
     -f "${SCRIPT_DIR}/Dockerfile" \
     "${SCRIPT_DIR}"
 
