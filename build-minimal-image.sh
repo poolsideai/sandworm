@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR="${SCRIPT_DIR}"
 BUILD_DIR="${SCRIPT_DIR}/cmd/sandworm"
-IMAGE_NAME="sandworm"
+IMAGE_NAME="poolsideengineering/sandworm"
 
 echo "Building minimal sandworm binaries and Docker image for amd64 and arm64..."
 
@@ -81,7 +81,7 @@ fi
 
 # Build multiarch image using the local binaries
 # Build from the script directory
-docker buildx build \
+docker buildx build $@ \
     --platform linux/amd64,linux/arm64 \
     --tag "${IMAGE_NAME}:latest" \
     -f "${SCRIPT_DIR}/Dockerfile" \
