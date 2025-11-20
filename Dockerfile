@@ -1,6 +1,7 @@
-FROM debian:bookworm-slim
+FROM alpine:3.22.2
 
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates
+RUN update-ca-certificates
 
 # Copy the pre-built binary based on target architecture
 # TARGETARCH is amd64 or arm64, but our binaries use the same naming

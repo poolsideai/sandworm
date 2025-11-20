@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -362,7 +363,10 @@ func (p *Proxy) Start(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		slog.Info("Stopping proxy")
-		p.Stop()
+		err := p.Stop(context.Background())
+		if err != nil {
+			slog.Error("Error stopping proxy", "error", err)
+		}
 	}()
 
 	return nil
@@ -390,8 +394,8 @@ func (p *Proxy) getAllowedCIDRs() []string {
 	return cidrs
 }
 
-func (p *Proxy) Stop() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func (p *Proxy) Stop(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	var errs []error
@@ -401,18 +405,12 @@ func (p *Proxy) Stop() error {
 			errs = append(errs, fmt.Errorf("proxy server shutdown: %w", err))
 		}
 	}
-
 	if p.adminServer != nil {
 		if err := p.adminServer.Shutdown(ctx); err != nil {
 			errs = append(errs, fmt.Errorf("admin server shutdown: %w", err))
 		}
 	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("shutdown errors: %v", errs)
-	}
-
-	return nil
+	return errors.Join(errs...)
 }
 
 func (p *Proxy) GetPort() int {

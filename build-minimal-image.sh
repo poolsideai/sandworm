@@ -19,7 +19,7 @@ ARCHS=("amd64" "arm64")
 
 for ARCH in "${ARCHS[@]}"; do
     echo "Step 1: Building optimized binary for ${ARCH}..."
-    GOARCH="${ARCH}" GOOS=linux go build \
+    CGO_ENABLED=0 GOARCH="${ARCH}" GOOS=linux go build \
         -ldflags="-s -w" \
         -trimpath \
         -o "${OUTPUT_DIR}/sandworm-linux-${ARCH}" \

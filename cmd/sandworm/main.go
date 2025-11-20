@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -40,7 +39,7 @@ func proxyCommand() *cobra.Command {
 Intended use: the proxy runs in a container with Internet access and provides HTTP/HTTPS proxy
 to containers on an internal network, with configurable domain and CIDR filtering.`,
 		RunE: func(cmd *cobra.Command, cmdArgs []string) error {
-			return runProxy(args)
+			return runProxy(cmd.Context(), args)
 		},
 	}
 
@@ -53,7 +52,7 @@ to containers on an internal network, with configurable domain and CIDR filterin
 	return cmd
 }
 
-func runProxy(args proxyArgs) error {
+func runProxy(ctx context.Context, args proxyArgs) error {
 	level := slog.LevelInfo
 	switch args.LogLevel {
 	case "debug":
@@ -90,7 +89,7 @@ func runProxy(args proxyArgs) error {
 
 	proxyServer := proxy.NewProxy(args.Port, args.AdminEnabled, allowedDomains, allowedCIDRs)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	if err := proxyServer.Start(ctx); err != nil {
@@ -112,15 +111,11 @@ func runProxy(args proxyArgs) error {
 
 	cancel()
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer shutdownCancel()
-
-	if err := proxyServer.Stop(); err != nil {
+	if err := proxyServer.Stop(ctx); err != nil {
 		slog.Error("Error during proxy shutdown", "error", err)
 		return err
 	}
 
-	<-shutdownCtx.Done()
 	slog.Info("Proxy shut down")
 	return nil
 }

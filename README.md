@@ -39,6 +39,7 @@ Build the Docker image with the accompanying Dockerfile. For size-optimized buil
 
 ### Official image
 
+Go ahead and grab one, it's just 12MB at the time of writing!
 https://hub.docker.com/r/poolsideengineering/sandworm
 
 ```
